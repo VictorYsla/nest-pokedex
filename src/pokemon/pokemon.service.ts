@@ -10,13 +10,21 @@ import { isValidObjectId, Model } from 'mongoose';
 import { Pokemon } from './entities/pokemon.entity';
 import { CreatePokemonDto } from './dto/create-pokemon.dto';
 import { UpdatePokemonDto } from './dto/update-pokemon.dto';
+import { PokemonData } from 'src/seed/interfaces/pokemon-data.interface';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class PokemonService {
+  private defaultLimit: number;
+
   constructor(
     @InjectModel(Pokemon.name) // añadir el decorador para poder inyectar //Note: name es el name que se está extendiendo desde mongo
     private readonly pokemonModel: Model<Pokemon>, // Esto por si solo no es un provider, no se puede inyectar solo así
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.defaultLimit = configService.get<number>('defaultLimit');
+  }
 
   async create(createPokemonDto: CreatePokemonDto) {
     try {
@@ -27,8 +35,13 @@ export class PokemonService {
     }
   }
 
-  findAll() {
-    return `This action returns all pokemon`;
+  findAll(paginationDto: PaginationDto) {
+    return this.pokemonModel
+      .find()
+      .limit(this.defaultLimit || 10)
+      .skip(paginationDto.offset)
+      .sort({ no: 'asc' })
+      .select('-__v');
   }
 
   async findOne(term: string) {
@@ -77,6 +90,18 @@ export class PokemonService {
     }
 
     return;
+  }
+
+  async fillPokemonsWithSeedData(newData: PokemonData[]) {
+    await this.pokemonModel.deleteMany({}); // esto significa borrar toda la data, utilizar solo en casos especīficos, por ejemplo, donde solo exista data seed
+    // const savedData = newData.map((item) => {
+    //   return this.create(item);
+    // });
+    // const currentData = await Promise.all(savedData);
+
+    const savedData = await this.pokemonModel.insertMany(newData); // solo utilizar cuando se añade un seed
+
+    return savedData;
   }
 
   private handleExceptions(error: any) {
